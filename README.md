@@ -11,6 +11,15 @@
 
 
 
+## 更新
+
+* 解决了对lxml库的依赖
+* 改变了一报动态取地址的网址，之前是从上报网址中取默认内容，现在改为从上报历史中取前一天上报的地址
+* 解决了个别系统取地址时报index error的问题
+* 加入`students`文件夹和`all_stu.json`文件内容的同步模块
+
+
+
 ## 免责声明
 
 本项目仅做免费的学术交流使用。请勿做商业用途！！
@@ -53,6 +62,26 @@
     stu_1.txt login succeed!
     张三 done
     ```
+    
+6. 假如仅仅想测试是否能成功登录和取地址，请把`manage.run()`注释掉，然后把`manage.check()`的注释符号去掉，假如配置好了发送邮件，那么需要把`manage.send()`注释符去掉。
+
+    ```python
+    if __name__ == '__main__':
+        if os.path.exists('all_stu.json'):
+            all_stu = json.load(open('all_stu.json', 'r'))
+        else:
+            all_stu = make_json("students")
+        all_stu = update_json('students', all_stu)
+        manage = Manager(all_stu)
+        # manage.check()
+        manage.run()
+        # manage.send()
+        if len(manage.failed) != 0:
+            json.dump([i.stu_dic for i in manage.failed], open(
+                'all_stu_failed.json', 'w'), ensure_ascii=False) #记录上报没成功的人
+        json.dump(all_stu, open('all_stu.json', 'w'), ensure_ascii=False)
+    
+    ```
 
 
 
@@ -61,6 +90,16 @@
 * 一报一定要**自己报过至少一天**！！ 
 * 仍然在测试中，测试的人群有限，可能会有bug
 * **一报还未适配留宿同学**！！！假如需求较大会做相应适配
+* **两报的模板没有对除嘉定校区以外的校区做优化，需要修改内容**
+
+
+
+## To do
+
+* 完善两报，使得两报功能适合所有校区
+* 休眠机制完善，尽可能少地触发429错误
+
+
 
 
 
