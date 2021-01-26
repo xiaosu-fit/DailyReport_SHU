@@ -87,6 +87,42 @@ def send_email(content, subject="每日一报不成功！！"):
         print("Error: 无法发送邮件")
 
 
+def update_json(path, all_stu):
+    print("Checking updates")
+    curr_stu = [i for i in os.listdir('students') if '.txt' in i]
+    json_stu = [i['txt_file'] for i in all_stu]
+    delete_stu = list(set(json_stu).difference(set(curr_stu)))
+    print(len(delete_stu))
+    if len(delete_stu) != 0:
+        print(f'delete {len(delete_stu)}')
+        for i in all_stu:
+            if i['txt_file'] in delete_stu:
+                all_stu.remove(i)
+    else:
+        print("Nothing to delete")
+    added_stu = list(set(curr_stu).difference(set(json_stu)))
+    if len(added_stu) != 0:
+        print(f'add {len(added_stu)}')
+        for i in added_stu:
+            template = {"name": '',
+                        'txt_file': '',
+                        'stu_num': '',
+                        'pass': '',
+                        'cookie': '',
+                        'addr_1': ADDR_1,
+                        'addr_2': ''}
+            with open(os.path.join(path, i), 'r') as f:
+                info = f.read().split()
+                template['txt_file'] = i
+                template['stu_num'] = info[0]
+                template['pass'] = info[1]
+                if len(info) > 2:
+                    template['addr_1'] = info[2]
+                all_stu.append(template)
+    else:
+        print("Nothing to add")
+    return all_stu
+
 class Dailyreport:
     '''
     单个同学上报
@@ -226,9 +262,9 @@ class Dailyreport:
 
         if self.report:
             html = self.sess.get("https://selfreport.shu.edu.cn/")
-            html = soup(html.text, 'lxml')
+            html = soup(html.text, 'html.parser')
             name = html.find('span', {"id": "lbXingMing"}
-                             ).text.strip().split("：")[1]
+                             ).string.strip().split("：")[1]
             return name
         else:
             return ''
@@ -259,31 +295,21 @@ class Dailyreport:
 
     def get_addr_2(self):
         '''
-        从上报的网址中获取地址信息
+        从上一天的报送历史取到地址信息
         '''
-
         if self.one_or_two == 2:
             return ''
         else:
-            con = soup(self.report_page.text, 'lxml').findAll(
-                'script', {'type': 'text/javascript'})[-1].text
-            f_state_val = [i.strip().replace(';', '').split('=')[1]
-                           for i in con.split('var') if '={' in i]
-
-            try:
-                addrs = []
-                for i in f_state_val:
-                    addrs.append(i)
-                    if "国内详细地址" in i:
-                        break
-                return [eval(i.replace("true", 'True').replace('false', 'False')) for i in addrs[-4:]]
-            except:
-                addrs = []
-                for i in f_state_val:
-                    addrs.append(i)
-                    if len(addrs) > 3 and '选择县区' in addrs[-2]:
-                        break
-                return [eval(i.replace("true", 'True').replace('false', 'False')) for i in addrs[-4:]]
+            yesterday = (datetime.date.today() + datetime.timedelta(-1)).strftime('%Y-%m-%d') 
+            his = self.sess.get(f'https://selfreport.shu.edu.cn/ViewDayReport.aspx?day={yesterday}')
+            con = soup(his.text, 'html.parser').findAll('script', {'type': 'text/javascript'})[-1].string
+            f_state_val = [i.strip().replace(';', '').split('=')[1] for i in con.split('var') if '={' in i]
+            addrs = []
+            for i in f_state_val:
+                addrs.append(i)
+                if len(addrs)>3 and '选择县区' in addrs[-2]:
+                    break
+            return [eval(i.replace("true", 'True').replace('false', 'False')) for i in addrs[-4:]]
 
     def get_report_page(self):
         '''
@@ -423,6 +449,7 @@ class Manager:
                 for _ in tqdm(range(WAIT)):
                     time.sleep(1)
             dc = Dailyreport(i)
+            print('\n')
             self.check_result.append(dc)
             if dc.report == False:
                 self.sys_fail = True
@@ -468,7 +495,9 @@ if __name__ == '__main__':
         all_stu = json.load(open('all_stu.json', 'r'))
     else:
         all_stu = make_json("students")
+    all_stu = update_json('students', all_stu)
     manage = Manager(all_stu)
+    # manage.check()
     manage.run()
     # manage.send()
     if len(manage.failed) != 0:
